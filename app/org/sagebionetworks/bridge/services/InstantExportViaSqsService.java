@@ -21,6 +21,9 @@ import org.springframework.stereotype.Component;
 import org.sagebionetworks.bridge.config.BridgeConfig;
 import org.sagebionetworks.bridge.models.studies.StudyIdentifier;
 
+/**
+ * Implementation of {@link InstantExportService} that connects to the Bridge Exporter Service via SQS.
+ */
 @Component
 public class InstantExportViaSqsService implements InstantExportService{
     private static final Logger logger = LoggerFactory.getLogger(InstantExportViaSqsService.class);

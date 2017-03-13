@@ -15,6 +15,7 @@ import org.sagebionetworks.bridge.models.accounts.UserSession;
 import org.sagebionetworks.bridge.models.studies.StudyIdentifier;
 import org.sagebionetworks.bridge.services.InstantExportService;
 
+/** Play controller for one-time export requests. */
 @Controller
 public class InstantExportController extends BaseController {
     private InstantExportService instantExportService;
