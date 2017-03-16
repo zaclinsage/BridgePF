@@ -36,7 +36,6 @@ public class InstantExportController extends BaseController {
 
         DateTimeFormatter dtf = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
         DateTime endDateTime = DateTime.parse(endDateTimeStr, dtf);
-        System.out.println(endDateTime);
 
         instantExportService.export(studyIdentifier, endDateTime);
         return acceptedResult("Request submitted.");

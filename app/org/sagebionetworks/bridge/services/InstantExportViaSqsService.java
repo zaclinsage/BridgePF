@@ -95,8 +95,6 @@ public class InstantExportViaSqsService implements InstantExportService{
 
         String requestJson = JSON_OBJECT_MAPPER.writeValueAsString(requestNode);
 
-        System.out.println(requestJson);
-
         // send to SQS
         String queueUrl = bridgeConfig.getProperty(CONFIG_KEY_EXPORTER_SQS_QUEUE_URL);
         SendMessageResult sqsResult = sqsClient.sendMessage(queueUrl, requestJson);
