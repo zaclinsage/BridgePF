@@ -9,14 +9,9 @@ import static org.mockito.Mockito.when;
 import static org.sagebionetworks.bridge.Roles.DEVELOPER;
 import static org.sagebionetworks.bridge.Roles.RESEARCHER;
 
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import play.mvc.Result;
@@ -37,9 +32,6 @@ public class InstantExportControllerTest {
     @Mock
     private InstantExportService mockService;
 
-    @Captor
-    private ArgumentCaptor<DateTime> dateTimeArgumentCaptor;
-
     @Before
     public void before() throws Exception {
         controller = spy(new InstantExportController());
@@ -52,17 +44,10 @@ public class InstantExportControllerTest {
 
     @Test
     public void test() throws Exception {
-        String endDateTimeStr = "2013-11-15T08:00:00.000-08:00";
-
         // execute and validate
-        Result result = controller.requestInstantExport(endDateTimeStr);
+        Result result = controller.requestInstantExport();
         assertEquals(202, result.status());
 
-        verify(mockService).export(eq(studyIdentifier), dateTimeArgumentCaptor.capture());
-
-        // validate args sent to mock service
-        DateTime endDateTime = dateTimeArgumentCaptor.getValue();
-        DateTimeFormatter dtf = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-        assertEquals(DateTime.parse(endDateTimeStr, dtf).getMillis(), endDateTime.getMillis());
+        verify(mockService).export(eq(studyIdentifier));
     }
 }

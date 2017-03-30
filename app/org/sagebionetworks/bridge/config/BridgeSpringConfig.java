@@ -13,8 +13,6 @@ import com.amazonaws.services.datapipeline.DataPipelineClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
-import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient;
@@ -48,6 +46,7 @@ import org.sagebionetworks.bridge.dynamodb.AnnotationBasedTableCreator;
 import org.sagebionetworks.bridge.dynamodb.DynamoActivityEvent;
 import org.sagebionetworks.bridge.dynamodb.DynamoCompoundActivityDefinition;
 import org.sagebionetworks.bridge.dynamodb.DynamoCriteria;
+import org.sagebionetworks.bridge.dynamodb.DynamoExportTime;
 import org.sagebionetworks.bridge.dynamodb.DynamoExternalIdentifier;
 import org.sagebionetworks.bridge.dynamodb.DynamoFPHSExternalIdentifier;
 import org.sagebionetworks.bridge.dynamodb.DynamoHealthDataAttachment;
@@ -467,6 +466,12 @@ public class BridgeSpringConfig {
         return dynamoUtils.getMapper(DynamoScheduledActivity.class);
     }
 
+    @Bean(name = "exportTimeDdbMapper")
+    @Autowired
+    public DynamoDBMapper exportTimeDdbMapper(DynamoUtils dynamoUtils) {
+        return dynamoUtils.getMapper(DynamoExportTime.class);
+    }
+
     // Do NOT reference this bean outside of StormpathAccountDao. Injected for testing purposes.
     @Bean(name = "stormpathClient")
     @Autowired
@@ -498,22 +503,4 @@ public class BridgeSpringConfig {
         synapseClient.setApiKey(bridgeConfig().get("synapse.api.key"));
         return synapseClient;
     }
-
-    @Bean
-    public DynamoDB ddbClient() {
-        return new DynamoDB(dynamoDbClient());
-    }
-
-    @Bean(name = "ddbPrefix")
-    public String ddbPrefix() {
-        String envName = bridgeConfig().getEnvironment().name().toLowerCase();
-        String userName = bridgeConfig().getUser();
-        return envName + '-' + userName + '-';
-    }
-
-    @Bean(name = "ddbExportTimeTable")
-    public Table ddbExportTimeTable() {
-        return ddbClient().getTable(ddbPrefix() + "ExportTime");
-    }
-
 }

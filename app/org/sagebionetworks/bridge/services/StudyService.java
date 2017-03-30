@@ -10,12 +10,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
 import javax.annotation.Resource;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -23,12 +21,15 @@ import org.jsoup.safety.Whitelist;
 import org.sagebionetworks.client.SynapseClient;
 import org.sagebionetworks.client.exceptions.SynapseException;
 import org.sagebionetworks.client.exceptions.SynapseNotFoundException;
+import org.sagebionetworks.client.exceptions.SynapseServerException;
 import org.sagebionetworks.repo.model.MembershipInvtnSubmission;
 import org.sagebionetworks.repo.model.Project;
 import org.sagebionetworks.repo.model.ResourceAccess;
 import org.sagebionetworks.repo.model.Team;
 import org.sagebionetworks.repo.model.auth.NewUser;
 import org.sagebionetworks.repo.model.util.ModelConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,7 @@ import org.sagebionetworks.bridge.Roles;
 import org.sagebionetworks.bridge.cache.CacheProvider;
 import org.sagebionetworks.bridge.config.BridgeConfigFactory;
 import org.sagebionetworks.bridge.dao.DirectoryDao;
+import org.sagebionetworks.bridge.dao.ExportTimeDao;
 import org.sagebionetworks.bridge.dao.StudyDao;
 import org.sagebionetworks.bridge.exceptions.BadRequestException;
 import org.sagebionetworks.bridge.exceptions.ConstraintViolationException;
@@ -67,6 +69,7 @@ import org.sagebionetworks.bridge.validators.Validate;
 
 @Component("studyService")
 public class StudyService {
+    private static final Logger logger = LoggerFactory.getLogger(StudyService.class);
 
     static final String EXPORTER_SYNAPSE_USER_ID = BridgeConfigFactory.getConfig().getExporterSynapseId(); // copy-paste from website
     static final String SYNAPSE_REGISTER_END_POINT = "https://www.synapse.org/#!NewAccount:";
@@ -77,6 +80,7 @@ public class StudyService {
     private UploadCertificateService uploadCertService;
     private StudyDao studyDao;
     private DirectoryDao directoryDao;
+    private ExportTimeDao exportTimeDao;
     private StudyValidator validator;
     private CacheProvider cacheProvider;
     private SubpopulationService subpopService;
@@ -130,6 +134,10 @@ public class StudyService {
     @Autowired
     final void setDirectoryDao(DirectoryDao directoryDao) {
         this.directoryDao = directoryDao;
+    }
+    @Autowired
+    final void setExportTimeDao(ExportTimeDao exportTimeDao) {
+        this.exportTimeDao = exportTimeDao;
     }
     @Autowired
     final void setCacheProvider(CacheProvider cacheProvider) {
@@ -244,9 +252,15 @@ public class StudyService {
         // send verification email from both Bridge and Synapse as well
         for (StudyParticipant user: users) {
             IdentifierHolder identifierHolder = participantService.createParticipant(study, user.getRoles(), user,true);
+
+            // first check if the email already being used in Synapse
             NewUser synapseUser = new NewUser();
             synapseUser.setEmail(user.getEmail());
-            synapseClient.newAccountEmailValidation(synapseUser, SYNAPSE_REGISTER_END_POINT);
+            try {
+                synapseClient.newAccountEmailValidation(synapseUser, SYNAPSE_REGISTER_END_POINT);
+            } catch (SynapseServerException e) {
+                logger.error("Email: " + user.getEmail() + " already exists in Synapse", e);
+            }
 
             // send resetting password email as well
             participantService.requestResetPassword(study, identifierHolder.getIdentifier());
@@ -454,6 +468,9 @@ public class StudyService {
                     existing.getStudyIdentifier());
             subpopService.deleteAllSubpopulations(existing.getStudyIdentifier());
             topicService.deleteAllTopics(existing.getStudyIdentifier());
+
+            // also delete study info in export time table
+            exportTimeDao.deleteStudyInfo(identifier);
         }
 
         cacheProvider.removeStudy(identifier);

@@ -4,9 +4,6 @@ import static org.sagebionetworks.bridge.Roles.DEVELOPER;
 import static org.sagebionetworks.bridge.Roles.RESEARCHER;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import play.mvc.Result;
@@ -29,15 +26,11 @@ public class InstantExportController extends BaseController {
     /**
      * Play handler for requesting instant export, only for current study. User must be one of Developer or Researcher.
      */
-    public Result requestInstantExport(String endDateTimeStr) throws JsonProcessingException {
-        System.out.println(endDateTimeStr + "\n");
+    public Result requestInstantExport() throws JsonProcessingException {
         UserSession session = getAuthenticatedSession(DEVELOPER, RESEARCHER);
         StudyIdentifier studyIdentifier = session.getStudyIdentifier();
 
-        DateTimeFormatter dtf = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-        DateTime endDateTime = DateTime.parse(endDateTimeStr, dtf);
-
-        instantExportService.export(studyIdentifier, endDateTime);
+        instantExportService.export(studyIdentifier);
         return acceptedResult("Request submitted.");
     }
 }
