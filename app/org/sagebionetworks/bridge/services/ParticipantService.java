@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.BridgeConstants;
 import org.sagebionetworks.bridge.Roles;
 import org.sagebionetworks.bridge.cache.CacheProvider;
 import org.sagebionetworks.bridge.dao.AccountDao;
@@ -296,21 +295,6 @@ public class ParticipantService {
         accountDao.requestResetPassword(study, email);
     }
 
-    public PagedResourceList<? extends ScheduledActivity> getActivityHistory(Study study, String userId,
-            String offsetKey, Integer pageSize) {
-        checkNotNull(study);
-        checkArgument(isNotBlank(userId));
-        if (pageSize == null) {
-            pageSize = BridgeConstants.API_DEFAULT_PAGE_SIZE;
-        }
-        if (pageSize < API_MINIMUM_PAGE_SIZE || pageSize > API_MAXIMUM_PAGE_SIZE) {
-            throw new BadRequestException(PAGE_SIZE_ERROR);
-        }
-        Account account = getAccountThrowingException(study, userId);
-
-        return activityDao.getActivityHistory(account.getHealthCode(), offsetKey, pageSize);
-    }
-
     public ForwardCursorPagedResourceList<ScheduledActivity> getActivityHistory(Study study, String userId,
             String activityGuid, DateTime scheduledOnStart, DateTime scheduledOnEnd, String offsetBy, int pageSize) {
         checkNotNull(study);
@@ -352,6 +336,19 @@ public class ParticipantService {
         consentService.withdrawAllConsents(study, account, withdrawal, withdrewOn);
     }
 
+    public void withdrawConsent(Study study, String userId, SubpopulationGuid subpopGuid, Withdrawal withdrawal,
+            long withdrewOn) {
+        checkNotNull(study);
+        checkNotNull(userId);
+        checkNotNull(subpopGuid);
+        checkNotNull(withdrawal);
+        checkArgument(withdrewOn > 0);
+
+        Account account = getAccountThrowingException(study, userId);
+
+        consentService.withdrawConsent(study, subpopGuid, account, withdrawal, withdrewOn);
+    }
+    
     public void resendConsentAgreement(Study study, SubpopulationGuid subpopGuid, String userId) {
         checkNotNull(study);
         checkNotNull(subpopGuid);

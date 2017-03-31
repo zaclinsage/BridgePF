@@ -180,17 +180,6 @@ public class ParticipantController extends BaseController {
         return okResult("Request to reset password sent to user.");
     }
     
-    public Result getActivityHistory(String userId, String offsetKey, String pageSizeString) throws Exception {
-        UserSession session = getAuthenticatedSession(RESEARCHER);
-        Study study = studyService.getStudy(session.getStudyIdentifier());
-        
-        Integer pageSize = (pageSizeString != null) ? Integer.parseInt(pageSizeString,10) : null;
-        
-        PagedResourceList<? extends ScheduledActivity> history = participantService.getActivityHistory(study, userId, offsetKey, pageSize);
-        
-        return ok(ScheduledActivity.RESEARCHER_SCHEDULED_ACTIVITY_WRITER.writeValueAsString(history));
-    }
-
     public Result getActivityHistoryV2(String userId, String activityGuid, String scheduledOnStartString,
             String scheduledOnEndString, String offsetBy, String pageSizeString) throws Exception {
         UserSession session = getAuthenticatedSession(RESEARCHER);
@@ -224,11 +213,11 @@ public class ParticipantController extends BaseController {
         return okResult("Email verification request has been resent to user.");
     }
     
-    public Result resendConsentAgreement(String userId, String guid) {
+    public Result resendConsentAgreement(String userId, String subpopulationGuid) {
         UserSession session = getAuthenticatedSession(RESEARCHER);
         Study study = studyService.getStudy(session.getStudyIdentifier());
         
-        SubpopulationGuid subpopGuid = SubpopulationGuid.create(guid);
+        SubpopulationGuid subpopGuid = SubpopulationGuid.create(subpopulationGuid);
         participantService.resendConsentAgreement(study, subpopGuid, userId);
         
         return okResult("Consent agreement resent to user.");
@@ -244,6 +233,19 @@ public class ParticipantController extends BaseController {
         participantService.withdrawAllConsents(study, userId, withdrawal, withdrewOn);
         
         return okResult("User has been withdrawn from the study.");
+    }
+    
+    public Result withdrawConsent(String userId, String subpopulationGuid) {
+        UserSession session = getAuthenticatedSession(RESEARCHER);
+        Study study = studyService.getStudy(session.getStudyIdentifier());
+        
+        Withdrawal withdrawal = parseJson(request(), Withdrawal.class);
+        long withdrewOn = DateTime.now().getMillis();
+        SubpopulationGuid subpopGuid = SubpopulationGuid.create(subpopulationGuid);
+        
+        participantService.withdrawConsent(study, userId, subpopGuid, withdrawal, withdrewOn);
+        
+        return okResult("User has been withdrawn from subpopulation '"+subpopulationGuid+"'.");
     }
     
     public Result getUploads(String userId, String startTimeString, String endTimeString) {

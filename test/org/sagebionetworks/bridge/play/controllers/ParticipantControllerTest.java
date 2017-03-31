@@ -79,13 +79,13 @@ import org.sagebionetworks.bridge.services.StudyService;
 @RunWith(MockitoJUnitRunner.class)
 public class ParticipantControllerTest {
 
+    private static final String SUBPOP_GUID = "subpopGuid";
+
     private static final BridgeObjectMapper MAPPER = BridgeObjectMapper.get();
     
     private static final TypeReference<ForwardCursorPagedResourceList<ScheduledActivity>> FORWARD_CURSOR_PAGED_ACTIVITIES_REF = new TypeReference<ForwardCursorPagedResourceList<ScheduledActivity>>() {
     };
     
-    private static final TypeReference<PagedResourceList<ScheduledActivity>> PAGED_ACTIVITIES_REF = new TypeReference<PagedResourceList<ScheduledActivity>>() {};
-
     private static final TypeReference<PagedResourceList<AccountSummary>> ACCOUNT_SUMMARY_PAGE = new TypeReference<PagedResourceList<AccountSummary>>(){};
     
     private static final TypeReference<PagedResourceList<? extends Upload>> UPLOADS_REF = new TypeReference<PagedResourceList<? extends Upload>>(){};
@@ -561,38 +561,6 @@ public class ParticipantControllerTest {
     }
     
     @Test
-    public void canGetActivityHistory() throws Exception {
-        doReturn(createActivityResults()).when(mockParticipantService).getActivityHistory(study, ID, "offsetKey", new Integer(40));
-        
-        Result result = controller.getActivityHistory(ID, "offsetKey", "40");
-        assertEquals(200, result.status());
-        PagedResourceList<ScheduledActivity> page = MAPPER.readValue(Helpers.contentAsString(result), PAGED_ACTIVITIES_REF);
-        
-        ScheduledActivity activity = page.getItems().iterator().next();
-        assertEquals("schedulePlanGuid", activity.getSchedulePlanGuid());
-        assertNull(activity.getHealthCode());
-        
-        assertEquals(1, page.getItems().size()); // have not mocked out these items, but the list is there.
-        assertEquals(25, page.getPageSize());
-        assertEquals(100, page.getTotal());
-        verify(mockParticipantService).getActivityHistory(study, ID, "offsetKey", new Integer(40));
-    }
-    
-    @Test
-    public void canGetActivityWithNullValues() throws Exception {
-        doReturn(createActivityResults()).when(mockParticipantService).getActivityHistory(study, ID, null, null);
-        
-        Result result = controller.getActivityHistory(ID, null, null);
-        assertEquals(200, result.status());
-        PagedResourceList<ScheduledActivity> page = MAPPER.readValue(Helpers.contentAsString(result), PAGED_ACTIVITIES_REF);
-        
-        assertEquals(1, page.getItems().size()); // have not mocked out these items, but the list is there.
-        assertEquals(25, page.getPageSize());
-        assertEquals(100, page.getTotal());
-        verify(mockParticipantService).getActivityHistory(study, ID, null, null);
-    }
-    
-    @Test
     public void canGetActivityHistoryV2() throws Exception {
         doReturn(createActivityResultsV2()).when(mockParticipantService).getActivityHistory(eq(study), eq(ID), eq(ACTIVITY_GUID),
                 any(), any(), eq("200"), eq(77));
@@ -654,9 +622,9 @@ public class ParticipantControllerTest {
     
     @Test
     public void resendConsentAgreement() throws Exception {
-        controller.resendConsentAgreement(ID, "subpopGuid");
+        controller.resendConsentAgreement(ID, SUBPOP_GUID);
         
-        verify(mockParticipantService).resendConsentAgreement(study, SubpopulationGuid.create("subpopGuid"), ID);
+        verify(mockParticipantService).resendConsentAgreement(study, SubpopulationGuid.create(SUBPOP_GUID), ID);
     }
 
     @Test
@@ -669,6 +637,22 @@ public class ParticipantControllerTest {
             controller.withdrawFromAllConsents(ID);
             
             verify(mockParticipantService).withdrawAllConsents(study, ID, new Withdrawal("Because, reasons."), 20000);
+        } finally {
+            DateTimeUtils.setCurrentMillisSystem();
+        }
+    }
+    
+    @Test
+    public void withdrawConsent() throws Exception {
+        DateTimeUtils.setCurrentMillisFixed(20000);
+        try {
+            String json = "{\"reason\":\"Because, reasons.\"}";
+            TestUtils.mockPlayContextWithJson(json);
+            
+            controller.withdrawConsent(ID, SUBPOP_GUID);
+            
+            verify(mockParticipantService).withdrawConsent(study, ID, SubpopulationGuid.create(SUBPOP_GUID),
+                    new Withdrawal("Because, reasons."), 20000);
         } finally {
             DateTimeUtils.setCurrentMillisSystem();
         }
@@ -740,18 +724,6 @@ public class ParticipantControllerTest {
         
         assertEquals("a subject", captured.getSubject());
         assertEquals("a message", captured.getMessage());
-    }
-    
-    private PagedResourceList<ScheduledActivity> createActivityResults() {
-        List<ScheduledActivity> list = Lists.newArrayList();
-        
-        DynamoScheduledActivity activity = new DynamoScheduledActivity();
-        activity.setActivity(TestUtils.getActivity1());
-        activity.setHealthCode("healthCode");
-        activity.setSchedulePlanGuid("schedulePlanGuid");
-        list.add(activity);
-        
-        return new PagedResourceList<>(list, null, 25, 100);
     }
     
     private ForwardCursorPagedResourceList<ScheduledActivity> createActivityResultsV2() {
