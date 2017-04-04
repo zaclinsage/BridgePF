@@ -10,10 +10,12 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Resource;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -40,7 +42,6 @@ import org.sagebionetworks.bridge.Roles;
 import org.sagebionetworks.bridge.cache.CacheProvider;
 import org.sagebionetworks.bridge.config.BridgeConfigFactory;
 import org.sagebionetworks.bridge.dao.DirectoryDao;
-import org.sagebionetworks.bridge.dao.ExportTimeDao;
 import org.sagebionetworks.bridge.dao.StudyDao;
 import org.sagebionetworks.bridge.exceptions.BadRequestException;
 import org.sagebionetworks.bridge.exceptions.ConstraintViolationException;
@@ -69,7 +70,7 @@ import org.sagebionetworks.bridge.validators.Validate;
 
 @Component("studyService")
 public class StudyService {
-    private static final Logger logger = LoggerFactory.getLogger(StudyService.class);
+    private static Logger LOG = LoggerFactory.getLogger(StudyService.class);
 
     static final String EXPORTER_SYNAPSE_USER_ID = BridgeConfigFactory.getConfig().getExporterSynapseId(); // copy-paste from website
     static final String SYNAPSE_REGISTER_END_POINT = "https://www.synapse.org/#!NewAccount:";
@@ -80,7 +81,6 @@ public class StudyService {
     private UploadCertificateService uploadCertService;
     private StudyDao studyDao;
     private DirectoryDao directoryDao;
-    private ExportTimeDao exportTimeDao;
     private StudyValidator validator;
     private CacheProvider cacheProvider;
     private SubpopulationService subpopService;
@@ -94,6 +94,8 @@ public class StudyService {
     private String defaultEmailVerificationTemplateSubject;
     private String defaultResetPasswordTemplate;
     private String defaultResetPasswordTemplateSubject;
+    private String defaultEmailSignInTemplate;
+    private String defaultEmailSignInTemplateSubject;
     
     @Value("classpath:study-defaults/email-verification.txt")
     final void setDefaultEmailVerificationTemplate(org.springframework.core.io.Resource resource) throws IOException {
@@ -110,6 +112,14 @@ public class StudyService {
     @Value("classpath:study-defaults/reset-password-subject.txt")
     final void setDefaultPasswordTemplateSubject(org.springframework.core.io.Resource resource) throws IOException {
         this.defaultResetPasswordTemplateSubject = IOUtils.toString(resource.getInputStream(), StandardCharsets.UTF_8);
+    }
+    @Value("classpath:study-defaults/email-sign-in.txt")
+    final void setDefaultEmailSignInTemplate(org.springframework.core.io.Resource resource) throws IOException {
+        this.defaultEmailSignInTemplate = IOUtils.toString(resource.getInputStream(), StandardCharsets.UTF_8);
+    }
+    @Value("classpath:study-defaults/email-sign-in-subject.txt")
+    final void setDefaultEmailSignInTemplateSubject(org.springframework.core.io.Resource resource) throws IOException {
+        this.defaultEmailSignInTemplateSubject = IOUtils.toString(resource.getInputStream(), StandardCharsets.UTF_8);
     }
 
     /** Compound activity definition service, used to clean up deleted studies. This is set by Spring. */
@@ -134,10 +144,6 @@ public class StudyService {
     @Autowired
     final void setDirectoryDao(DirectoryDao directoryDao) {
         this.directoryDao = directoryDao;
-    }
-    @Autowired
-    final void setExportTimeDao(ExportTimeDao exportTimeDao) {
-        this.exportTimeDao = exportTimeDao;
     }
     @Autowired
     final void setCacheProvider(CacheProvider cacheProvider) {
@@ -178,9 +184,18 @@ public class StudyService {
             study = studyDao.getStudy(identifier);
             cacheProvider.setStudy(study);
         }
-
-        if (study != null && !study.isActive() && !includeDeleted) {
-            throw new EntityNotFoundException(Study.class, "Study not found.");
+        if (study != null) {
+            // If it it exists and has been deactivated, and this call is not supposed to retrieve deactivated
+            // studies, treat it as if it doesn't exist.
+            if (!study.isActive() && !includeDeleted) {
+                throw new EntityNotFoundException(Study.class, "Study not found.");
+            }
+            // Because this template does not currently exist in studies, add the default if it is null.
+            if (study.getEmailSignInTemplate() == null) {
+                EmailTemplate template = new EmailTemplate(defaultEmailSignInTemplateSubject,
+                        defaultEmailSignInTemplate, MimeType.HTML);
+                study.setEmailSignInTemplate(template);
+            }
         }
 
         return study;
@@ -253,15 +268,17 @@ public class StudyService {
         for (StudyParticipant user: users) {
             IdentifierHolder identifierHolder = participantService.createParticipant(study, user.getRoles(), user,true);
 
-            // first check if the email already being used in Synapse
             NewUser synapseUser = new NewUser();
             synapseUser.setEmail(user.getEmail());
             try {
                 synapseClient.newAccountEmailValidation(synapseUser, SYNAPSE_REGISTER_END_POINT);
             } catch (SynapseServerException e) {
-                logger.error("Email: " + user.getEmail() + " already exists in Synapse", e);
+                if (!"The email address provided is already used.".equals(e.getMessage())) {
+                    throw e;
+                } else {
+                    LOG.info("Email: " + user.getEmail() + " already exists in Synapse", e);
+                }
             }
-
             // send resetting password email as well
             participantService.requestResetPassword(study, identifierHolder.getIdentifier());
         }
@@ -282,6 +299,7 @@ public class StudyService {
         study.setActive(true);
         study.setStrictUploadValidationEnabled(true);
         study.setEmailVerificationEnabled(true);
+        study.setEmailSignInEnabled(false);
         study.getDataGroups().add(BridgeConstants.TEST_USER_GROUP);
         setDefaultsIfAbsent(study);
         sanitizeHTML(study);
@@ -406,13 +424,17 @@ public class StudyService {
             study.setEmailVerificationEnabled(originalStudy.isEmailVerificationEnabled());
             study.setExternalIdValidationEnabled(originalStudy.isExternalIdValidationEnabled());
             study.setExternalIdRequiredOnSignup(originalStudy.isExternalIdRequiredOnSignup());
+            study.setEmailSignInEnabled(originalStudy.isEmailSignInEnabled());
         }
 
         // prevent anyone changing active to false -- it should be done by deactivateStudy() method
         if (originalStudy.isActive() && !study.isActive()) {
             throw new BadRequestException("Study cannot be deleted through an update.");
         }
-
+        
+        // With the introduction of the session verification email, studies won't have all the templates
+        // that are normally required. So set it if someone tries to update a study, to a default value.
+        setDefaultsIfAbsent(study);
         sanitizeHTML(study);
 
         study.setStormpathHref(originalStudy.getStormpathHref());
@@ -468,9 +490,6 @@ public class StudyService {
                     existing.getStudyIdentifier());
             subpopService.deleteAllSubpopulations(existing.getStudyIdentifier());
             topicService.deleteAllTopics(existing.getStudyIdentifier());
-
-            // also delete study info in export time table
-            exportTimeDao.deleteStudyInfo(identifier);
         }
 
         cacheProvider.removeStudy(identifier);
@@ -537,8 +556,8 @@ public class StudyService {
     
     /**
      * Has an aspect of the study changed that must be saved as well in the Stormpath directory? This 
-     * includes the email templates but also all the fields that can be substituted into the email templates
-     * such as names and emal addresses.
+     * includes the email templates for emails sent by Stormpath, but also all the fields that can be 
+     * substituted into the email templates such as names and emal addresses.
      * @param originalStudy
      * @param study
      * @return true if the password policy or email templates have changed
@@ -555,7 +574,7 @@ public class StudyService {
     }
     
     /**
-     * When the password policy or templates are not included, they are set to some sensible default 
+     * When the password policy or templates are not included, they are set to some sensible defaults.  
      * values. 
      * @param study
      */
@@ -563,49 +582,41 @@ public class StudyService {
         if (study.getPasswordPolicy() == null) {
             study.setPasswordPolicy(PasswordPolicy.DEFAULT_PASSWORD_POLICY);
         }
-        study.setVerifyEmailTemplate(fillOutTemplate(study.getVerifyEmailTemplate(),
-            defaultEmailVerificationTemplateSubject, defaultEmailVerificationTemplate));
-        study.setResetPasswordTemplate(fillOutTemplate(study.getResetPasswordTemplate(),
-            defaultResetPasswordTemplateSubject, defaultResetPasswordTemplate));
+        if (study.getVerifyEmailTemplate() == null) {
+            EmailTemplate template = new EmailTemplate(defaultEmailVerificationTemplateSubject,
+                    defaultEmailVerificationTemplate, MimeType.HTML);
+            study.setVerifyEmailTemplate(template);
+        }
+        if (study.getResetPasswordTemplate() == null) {
+            EmailTemplate template = new EmailTemplate(defaultResetPasswordTemplateSubject,
+                    defaultResetPasswordTemplate, MimeType.HTML);
+            study.setResetPasswordTemplate(template);
+        }
+        if (study.getEmailSignInTemplate() == null) {
+            EmailTemplate template = new EmailTemplate(defaultEmailSignInTemplateSubject,
+                    defaultEmailSignInTemplate, MimeType.HTML);
+            study.setEmailSignInTemplate(template);
+        }
     }
 
-    /**
-     * Partially resolve variables in the templates before saving on Stormpath. If templates are not provided, 
-     * then the default templates are used, and we assume these are text only, otherwise this method needs to 
-     * change the mime type it sets.
-     * @param template
-     * @param defaultSubject
-     * @param defaultBody
-     * @return
-     */
-    private EmailTemplate fillOutTemplate(EmailTemplate template, String defaultSubject, String defaultBody) {
-        if (template == null) {
-            template = new EmailTemplate(defaultSubject, defaultBody, MimeType.HTML);
-        }
-        if (StringUtils.isBlank(template.getSubject())) {
-            template = new EmailTemplate(defaultSubject, template.getBody(), template.getMimeType());
-        }
-        if (StringUtils.isBlank(template.getBody())) {
-            template = new EmailTemplate(template.getSubject(), defaultBody, template.getMimeType());
-        }
-        return template;
-    }
-    
     /**
      * Email templates can contain HTML. Ensure the subject text has no markup and the markup in the body 
      * is safe for display in web-based email clients and a researcher UI. We clean this up before 
      * validation in case only unacceptable content was in the template. 
      * @param study
      */
-    private void sanitizeHTML(Study study) {
+    protected void sanitizeHTML(Study study) {
         EmailTemplate template = study.getVerifyEmailTemplate();
         study.setVerifyEmailTemplate(sanitizeEmailTemplate(template));
         
         template = study.getResetPasswordTemplate();
         study.setResetPasswordTemplate(sanitizeEmailTemplate(template));
+        
+        template = study.getEmailSignInTemplate();
+        study.setEmailSignInTemplate(sanitizeEmailTemplate(template));
     }
     
-    private EmailTemplate sanitizeEmailTemplate(EmailTemplate template) {
+    protected EmailTemplate sanitizeEmailTemplate(EmailTemplate template) {
         // Skip sanitization if there's no template. This can happen now as we'd rather see an error if the caller
         // doesn't include a template when updating.
         if (template == null) {

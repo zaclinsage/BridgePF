@@ -94,6 +94,9 @@ public class ParticipantServiceTest {
     private static final String LAST_NAME = "lastName";
     private static final String FIRST_NAME = "firstName";
     private static final String PASSWORD = "P@ssword1";
+    private static final String ACTIVITY_GUID = "activityGuid";
+    private static final String PAGED_BY = "100";
+    private static final int PAGE_SIZE = 50;
     private static final Set<Roles> CALLER_ROLES = Sets.newHashSet(RESEARCHER);
     private static final Set<Roles> USER_ROLES = Sets.newHashSet(DEVELOPER);
     private static final LinkedHashSet<String> USER_LANGUAGES = (LinkedHashSet<String>)BridgeUtils.commaListToOrderedSet("de,fr");
@@ -156,6 +159,9 @@ public class ParticipantServiceTest {
     @Mock
     private NotificationsService notificationsService;
     
+    @Mock
+    private ScheduledActivityService scheduledActivityService;
+    
     @Captor
     ArgumentCaptor<StudyParticipant> participantCaptor;
     
@@ -194,6 +200,7 @@ public class ParticipantServiceTest {
         participantService.setScheduledActivityDao(activityDao);
         participantService.setUploadService(uploadService);
         participantService.setNotificationsService(notificationsService);
+        participantService.setScheduledActivityService(scheduledActivityService);
     }
     
     private void mockHealthCodeAndAccountRetrieval() {
@@ -682,50 +689,27 @@ public class ParticipantServiceTest {
     }
     
     @Test
-    public void canGetActivityHistoryWithDefaults() {
+    public void canGetActivityHistoryV2WithAllValues() {
         mockHealthCodeAndAccountRetrieval();
         
-        participantService.getActivityHistory(STUDY, ID, null, null);
-        
-        verify(activityDao).getActivityHistory(HEALTH_CODE, null, 50);
+        participantService.getActivityHistory(STUDY, ID, ACTIVITY_GUID, START_DATE, END_DATE, PAGED_BY, PAGE_SIZE);
+
+        verify(scheduledActivityService).getActivityHistory(HEALTH_CODE, ACTIVITY_GUID, START_DATE, END_DATE, PAGED_BY,
+                PAGE_SIZE);
     }
     
     @Test
-    public void canGetActivityHistoryLimitMinPaging() {
-        mockHealthCodeAndAccountRetrieval();
-        try {
-            participantService.getActivityHistory(STUDY, ID, null, 2);    
-            fail("Should have thrown an exception");
-        } catch(BadRequestException e) {
-            assertEquals("pageSize must be from 5-100 records", e.getMessage());
-        }
-        verifyNoMoreInteractions(activityDao);
-    }
-    
-    @Test
-    public void canGetActivityHistoryLimitMaxPaging() {
-        mockHealthCodeAndAccountRetrieval();
-        try {
-            participantService.getActivityHistory(STUDY, ID, null, 102);    
-            fail("Should have thrown an exception");
-        } catch(BadRequestException e) {
-            assertEquals("pageSize must be from 5-100 records", e.getMessage());
-        }
-        verifyNoMoreInteractions(activityDao);
-    }
-    
-    @Test
-    public void canGetActivityHistory() {
+    public void canGetActivityHistoryV2WithDefaults() {
         mockHealthCodeAndAccountRetrieval();
         
-        participantService.getActivityHistory(STUDY, ID, "key", 30);
-        
-        verify(activityDao).getActivityHistory(HEALTH_CODE, "key", 30);
+        participantService.getActivityHistory(STUDY, ID, ACTIVITY_GUID, null, null, null, PAGE_SIZE);
+
+        verify(scheduledActivityService).getActivityHistory(HEALTH_CODE, ACTIVITY_GUID, null, null, null, PAGE_SIZE);
     }
     
     @Test(expected = EntityNotFoundException.class)
-    public void getActivityHistoryNoUserThrowsCorrectException() {
-        participantService.getActivityHistory(STUDY, ID, null, 40);
+    public void getActivityHistoryV2NoUserThrowsCorrectException() {
+        participantService.getActivityHistory(STUDY, ID, ACTIVITY_GUID, null, null, null, PAGE_SIZE);
     }
     
     @Test
@@ -777,6 +761,18 @@ public class ParticipantServiceTest {
         participantService.withdrawAllConsents(STUDY, ID, withdrawal, withdrewOn);
         
         verify(consentService).withdrawAllConsents(STUDY, account, withdrawal, withdrewOn);
+    }
+    
+    @Test
+    public void withdrawConsent() {
+        mockHealthCodeAndAccountRetrieval();
+        
+        Withdrawal withdrawal = new Withdrawal("Reasons");
+        long withdrewOn = DateTime.now().getMillis();
+        
+        participantService.withdrawConsent(STUDY, ID, SUBPOP_GUID, withdrawal, withdrewOn);
+        
+        verify(consentService).withdrawConsent(STUDY, SUBPOP_GUID, account, withdrawal, withdrewOn);
     }
     
     @Test

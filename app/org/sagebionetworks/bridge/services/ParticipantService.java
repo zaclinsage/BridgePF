@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import org.sagebionetworks.bridge.BridgeConstants;
 import org.sagebionetworks.bridge.Roles;
 import org.sagebionetworks.bridge.cache.CacheProvider;
 import org.sagebionetworks.bridge.dao.AccountDao;
@@ -36,6 +35,7 @@ import org.sagebionetworks.bridge.dao.ParticipantOption.SharingScope;
 import org.sagebionetworks.bridge.dao.ScheduledActivityDao;
 import org.sagebionetworks.bridge.exceptions.BadRequestException;
 import org.sagebionetworks.bridge.exceptions.EntityNotFoundException;
+import org.sagebionetworks.bridge.models.ForwardCursorPagedResourceList;
 import org.sagebionetworks.bridge.models.PagedResourceList;
 import org.sagebionetworks.bridge.models.accounts.Account;
 import org.sagebionetworks.bridge.models.accounts.AccountSummary;
@@ -82,6 +82,8 @@ public class ParticipantService {
 
     private NotificationsService notificationsService;
 
+    private ScheduledActivityService scheduledActivityService;
+
     @Autowired
     final void setAccountDao(AccountDao accountDao) {
         this.accountDao = accountDao;
@@ -125,6 +127,11 @@ public class ParticipantService {
     @Autowired
     final void setNotificationsService(NotificationsService notificationsService) {
         this.notificationsService = notificationsService;
+    }
+
+    @Autowired
+    final void setScheduledActivityService(ScheduledActivityService scheduledActivityService) {
+        this.scheduledActivityService = scheduledActivityService;
     }
 
     public StudyParticipant getParticipant(Study study, String id, boolean includeHistory) {
@@ -257,8 +264,8 @@ public class ParticipantService {
         optionsService.setAllOptions(study.getStudyIdentifier(), account.getHealthCode(), options);
     }
 
-    private void updateAccountOptionsAndRoles(Study study, Set<Roles> callerRoles, Map<ParticipantOption, String> options,
-            Account account, StudyParticipant participant) {
+    private void updateAccountOptionsAndRoles(Study study, Set<Roles> callerRoles,
+            Map<ParticipantOption, String> options, Account account, StudyParticipant participant) {
         for (ParticipantOption option : ParticipantOption.values()) {
             options.put(option, option.fromParticipant(participant));
         }
@@ -288,19 +295,16 @@ public class ParticipantService {
         accountDao.requestResetPassword(study, email);
     }
 
-    public PagedResourceList<? extends ScheduledActivity> getActivityHistory(Study study, String userId,
-            String offsetKey, Integer pageSize) {
+    public ForwardCursorPagedResourceList<ScheduledActivity> getActivityHistory(Study study, String userId,
+            String activityGuid, DateTime scheduledOnStart, DateTime scheduledOnEnd, String offsetBy, int pageSize) {
         checkNotNull(study);
+        checkArgument(isNotBlank(activityGuid));
         checkArgument(isNotBlank(userId));
-        if (pageSize == null) {
-            pageSize = BridgeConstants.API_DEFAULT_PAGE_SIZE;
-        }
-        if (pageSize < API_MINIMUM_PAGE_SIZE || pageSize > API_MAXIMUM_PAGE_SIZE) {
-            throw new BadRequestException(PAGE_SIZE_ERROR);
-        }
+
         Account account = getAccountThrowingException(study, userId);
 
-        return activityDao.getActivityHistory(account.getHealthCode(), offsetKey, pageSize);
+        return scheduledActivityService.getActivityHistory(account.getHealthCode(), activityGuid, scheduledOnStart,
+                scheduledOnEnd, offsetBy, pageSize);
     }
 
     public void deleteActivities(Study study, String userId) {
@@ -332,6 +336,19 @@ public class ParticipantService {
         consentService.withdrawAllConsents(study, account, withdrawal, withdrewOn);
     }
 
+    public void withdrawConsent(Study study, String userId, SubpopulationGuid subpopGuid, Withdrawal withdrawal,
+            long withdrewOn) {
+        checkNotNull(study);
+        checkNotNull(userId);
+        checkNotNull(subpopGuid);
+        checkNotNull(withdrawal);
+        checkArgument(withdrewOn > 0);
+
+        Account account = getAccountThrowingException(study, userId);
+
+        consentService.withdrawConsent(study, subpopGuid, account, withdrawal, withdrewOn);
+    }
+    
     public void resendConsentAgreement(Study study, SubpopulationGuid subpopGuid, String userId) {
         checkNotNull(study);
         checkNotNull(subpopGuid);

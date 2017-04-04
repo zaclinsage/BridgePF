@@ -18,10 +18,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.Period;
 import org.springframework.validation.Validator;
+import play.Application;
+import play.inject.guice.GuiceApplicationBuilder;
+import play.mvc.Http;
+import play.mvc.Result;
+import play.test.Helpers;
 
 import org.sagebionetworks.bridge.config.BridgeConfigFactory;
 import org.sagebionetworks.bridge.dao.ParticipantOption.SharingScope;
@@ -48,8 +59,8 @@ import org.sagebionetworks.bridge.models.schedules.ScheduleCriteria;
 import org.sagebionetworks.bridge.models.schedules.SchedulePlan;
 import org.sagebionetworks.bridge.models.schedules.ScheduleStrategy;
 import org.sagebionetworks.bridge.models.schedules.ScheduleType;
-import org.sagebionetworks.bridge.models.schedules.SimpleScheduleStrategy;
 import org.sagebionetworks.bridge.models.schedules.ScheduledActivity;
+import org.sagebionetworks.bridge.models.schedules.SimpleScheduleStrategy;
 import org.sagebionetworks.bridge.models.studies.EmailTemplate;
 import org.sagebionetworks.bridge.models.studies.MimeType;
 import org.sagebionetworks.bridge.models.studies.PasswordPolicy;
@@ -60,33 +71,16 @@ import org.sagebionetworks.bridge.play.modules.BridgeTestSpringContextModule;
 import org.sagebionetworks.bridge.runnable.FailableRunnable;
 import org.sagebionetworks.bridge.validators.Validate;
 
-import play.Application;
-import play.inject.guice.GuiceApplicationBuilder;
-import play.mvc.Http;
-import play.mvc.Result;
-import play.test.Helpers;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-
 public class TestUtils {
     
     private static final DateTime TEST_CREATED_ON = DateTime.parse("2015-01-27T00:38:32.486Z");
 
     /**
      * Asserts that on validation, InvalidEntityException has been thrown with an error key that is the nested path to
-     * the object value that is invalid, and an error message that only uses the end of the key, and thus can be
-     * displayed in a UI for the user.
+     * the object value that is invalid, and the correct error message.
      */
     public static void assertValidatorMessage(Validator validator, Object object, String fieldName, String error) {
         String fieldNameAsLabel = fieldName;
-        if (fieldNameAsLabel.contains(".")) {
-            fieldNameAsLabel = fieldNameAsLabel.substring(fieldNameAsLabel.lastIndexOf(".")+1);
-        }
         if (!error.startsWith(" ")) {
             error = " " + error;
         }
@@ -275,31 +269,47 @@ public class TestUtils {
         
         SchedulePlan plan = new DynamoSchedulePlan();
         plan.setGuid("DDD");
-        plan.setStrategy(getStrategy("P3D", TestConstants.TEST_1_ACTIVITY));
+        plan.setStrategy(getStrategy("P3D", getActivity1()));
         plan.setStudyKey(studyId.getIdentifier());
         plans.add(plan);
         
         plan = new DynamoSchedulePlan();
         plan.setGuid("BBB");
-        plan.setStrategy(getStrategy("P1D", TestConstants.TEST_2_ACTIVITY));
+        plan.setStrategy(getStrategy("P1D", getActivity2()));
         plan.setStudyKey(studyId.getIdentifier());
         plans.add(plan);
         
         plan = new DynamoSchedulePlan();
         plan.setGuid("CCC");
-        plan.setStrategy(getStrategy("P2D", TestConstants.TEST_3_ACTIVITY));
+        plan.setStrategy(getStrategy("P2D", getActivity3()));
         plan.setStudyKey(studyId.getIdentifier());
         plans.add(plan);
 
         return plans;
     }
     
+    public static Activity getActivity1() {
+        return new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Activity1")
+                .withPublishedSurvey("identifier1", "AAA").build();
+    }
+    
+    public static Activity getActivity2() {
+        return new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Activity2")
+                .withPublishedSurvey("identifier2", "BBB").build();
+    }
+    
+    public static Activity getActivity3() {
+        return new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Activity3").withGuid("AAA")
+                .withTask("tapTest").build();
+    }
+    
     public static SchedulePlan getSimpleSchedulePlan(StudyIdentifier studyId) {
         Schedule schedule = new Schedule();
         schedule.setScheduleType(ScheduleType.RECURRING);
         schedule.setCronTrigger("0 0 8 ? * TUE *");
-        schedule.addActivity(new Activity.Builder().withLabel("Do task CCC").withTask("CCC").build());
-        schedule.setExpires(Period.parse("PT60S"));
+        schedule.addActivity(new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Do task CCC")
+                .withTask("CCC").build());
+        schedule.setExpires(Period.parse("PT1H"));
         schedule.setLabel("Test label for the user");
         
         SimpleScheduleStrategy strategy = new SimpleScheduleStrategy();
@@ -317,7 +327,8 @@ public class TestUtils {
         Schedule schedule = new Schedule();
         schedule.setScheduleType(ScheduleType.RECURRING);
         schedule.setCronTrigger("0 0 8 ? * TUE *");
-        schedule.addActivity(new Activity.Builder().withLabel("Do task CCC").withTask("CCC").build());
+        schedule.addActivity(new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Do task CCC")
+                .withTask("CCC").build());
         schedule.setExpires(Period.parse("PT60S"));
         schedule.setLabel("Test label for the user");
         
@@ -362,6 +373,7 @@ public class TestUtils {
         study.setPasswordPolicy(PasswordPolicy.DEFAULT_PASSWORD_POLICY);
         study.setVerifyEmailTemplate(new EmailTemplate("subject", "body with ${url}", MimeType.TEXT));
         study.setResetPasswordTemplate(new EmailTemplate("subject", "body with ${url}", MimeType.TEXT));
+        study.setEmailSignInTemplate(new EmailTemplate("${studyName} link", "Follow link ${token}", MimeType.TEXT));
         study.setIdentifier(id);
         study.setMinAgeOfConsent(18);
         study.setSponsorName("The Council on Test Studies");
@@ -378,8 +390,10 @@ public class TestUtils {
         study.setHealthCodeExportEnabled(true);
         study.setEmailVerificationEnabled(true);
         study.setExternalIdValidationEnabled(true);
+        study.setEmailSignInEnabled(true);
         study.setExternalIdRequiredOnSignup(true);
         study.setActive(true);
+        study.setDisableExport(false);
         study.setPushNotificationARNs(pushNotificationARNs);
         return study;
     }
@@ -388,21 +402,24 @@ public class TestUtils {
         Schedule schedule1 = new Schedule();
         schedule1.setScheduleType(ScheduleType.RECURRING);
         schedule1.setCronTrigger("0 0 8 ? * TUE *");
-        schedule1.addActivity(new Activity.Builder().withLabel("Do AAA task").withTask("AAA").build());
+        schedule1.addActivity(new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Do AAA task")
+                .withTask("AAA").build());
         schedule1.setExpires(Period.parse("PT1H"));
         schedule1.setLabel("Schedule 1");
 
         Schedule schedule2 = new Schedule();
         schedule2.setScheduleType(ScheduleType.RECURRING);
         schedule2.setCronTrigger("0 0 8 ? * TUE *");
-        schedule2.addActivity(new Activity.Builder().withLabel("Do BBB task").withTask("BBB").build());
+        schedule2.addActivity(new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Do BBB task")
+                .withTask("BBB").build());
         schedule2.setExpires(Period.parse("PT1H"));
         schedule2.setLabel("Schedule 2");
 
         Schedule schedule3 = new Schedule();
         schedule3.setScheduleType(ScheduleType.RECURRING);
         schedule3.setCronTrigger("0 0 8 ? * TUE *");
-        schedule3.addActivity(new Activity.Builder().withLabel("Do CCC task").withTask("CCC").build());
+        schedule3.addActivity(new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Do CCC task")
+                .withTask("CCC").build());
         schedule3.setExpires(Period.parse("PT1H"));
         schedule3.setLabel("Schedule 3");
         
@@ -422,8 +439,8 @@ public class TestUtils {
     }
     
     public static Schedule getSchedule(String label) {
-        Activity activity = new Activity.Builder().withLabel("Test survey")
-                        .withSurvey("identifier", "ABC", TEST_CREATED_ON).build();
+        Activity activity = new Activity.Builder().withGuid(BridgeUtils.generateGuid()).withLabel("Test survey")
+                .withSurvey("identifier", "ABC", TEST_CREATED_ON).build();
 
         Schedule schedule = new Schedule();
         schedule.setLabel(label);
@@ -431,6 +448,11 @@ public class TestUtils {
         schedule.setScheduleType(ScheduleType.RECURRING);
         schedule.setCronTrigger("0 0 8 ? * TUE *");
         return schedule;
+    }
+    
+    public static JsonNode getClientData() throws Exception {
+        String json = TestUtils.createJson("{'booleanFlag':true,'stringValue':'testString','intValue':4}");
+        return BridgeObjectMapper.get().readTree(json);
     }
     
     public static Set<String> getFieldNamesSet(JsonNode node) {
@@ -447,6 +469,10 @@ public class TestUtils {
      */
     public static String createJson(String json) {
         return json.replaceAll("'", "\"");
+    }
+    
+    public static JsonNode getJson(Result result) throws Exception {
+        return BridgeObjectMapper.get().readTree(Helpers.contentAsString(result));
     }
     
     public static Criteria createCriteria(Integer minAppVersion, Integer maxAppVersion, Set<String> allOfGroups, Set<String> noneOfGroups) {
