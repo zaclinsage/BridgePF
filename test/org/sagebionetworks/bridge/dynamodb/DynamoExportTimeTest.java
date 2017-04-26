@@ -22,7 +22,6 @@ public class DynamoExportTimeTest {
 
         final String json = BridgeObjectMapper.get().writeValueAsString(dynamoExportTime);
         final JsonNode node = BridgeObjectMapper.get().readTree(json);
-        System.out.println(node.toString());
         assertEqualsAndNotNull(dynamoExportTime.getStudyId(), node.get("studyId").textValue());
         assertEqualsAndNotNull(dynamoExportTime.getLastExportDateTime(), node.get("lastExportDateTime").asLong());
 

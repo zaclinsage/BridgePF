@@ -1,8 +1,8 @@
 package org.sagebionetworks.bridge.dynamodb;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,14 +13,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import org.sagebionetworks.bridge.exceptions.EntityNotFoundException;
 import org.sagebionetworks.bridge.models.ExportTime;
 
-@ContextConfiguration("classpath:test-context.xml")
-@RunWith(SpringJUnit4ClassRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class DynamoExportTimeDaoTest {
     private static final String STUDY_ID = "test-study-id";
 
@@ -43,7 +41,9 @@ public class DynamoExportTimeDaoTest {
     @Test
     public void testGetExportTime() {
         // execute
-        dynamoExportTimeDao.getExportTime(STUDY_ID);
+        ExportTime exportTime = dynamoExportTimeDao.getExportTime(STUDY_ID);
+        assertEquals(STUDY_ID, exportTime.getStudyId());
+        assertNull(exportTime.getLastExportDateTime());
         ArgumentCaptor<DynamoExportTime> captor = ArgumentCaptor.forClass(DynamoExportTime.class);
         verify(mockMapper).load(captor.capture());
 
@@ -57,7 +57,6 @@ public class DynamoExportTimeDaoTest {
 
         // execute
         dynamoExportTimeDao.getExportTime(STUDY_ID);
-        verify(mockMapper).load(eq(STUDY_ID));
     }
 
     @Test
@@ -67,10 +66,13 @@ public class DynamoExportTimeDaoTest {
 
         ArgumentCaptor<DynamoExportTime> captor = ArgumentCaptor.forClass(DynamoExportTime.class);
         verify(mockMapper).load(captor.capture());
-        verify(mockMapper).delete(any());
+        ArgumentCaptor<DynamoExportTime> captorDelete = ArgumentCaptor.forClass(DynamoExportTime.class);
+        verify(mockMapper).delete(captorDelete.capture());
 
         DynamoExportTime retDynamoExportTime = captor.getValue();
         assertEquals(STUDY_ID, retDynamoExportTime.getStudyId());
+        DynamoExportTime retDynamoExportTimeDelete = captorDelete.getValue();
+        assertEquals(STUDY_ID, retDynamoExportTimeDelete.getStudyId());
     }
 
     @Test

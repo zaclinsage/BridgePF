@@ -19,7 +19,7 @@ public class InstantExportController extends BaseController {
 
     /** Service handler for instant exporting request. */
     @Autowired
-    public void setInstantExportService(InstantExportService instantExportService) {
+    final void setInstantExportService(InstantExportService instantExportService) {
         this.instantExportService = instantExportService;
     }
 

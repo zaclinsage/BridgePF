@@ -1,6 +1,7 @@
 package org.sagebionetworks.bridge.services;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.sagebionetworks.bridge.TestConstants.TEST_STUDY;
 import static org.sagebionetworks.bridge.TestConstants.TEST_STUDY_IDENTIFIER;
 import static org.sagebionetworks.bridge.services.InstantExportViaSqsService.CONFIG_KEY_EXPORTER_SQS_QUEUE_URL;
+import static org.sagebionetworks.bridge.services.InstantExportViaSqsService.REQUEST_TAG;
 
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.SendMessageResult;
@@ -57,14 +59,18 @@ public class InstantExportServiceTest {
         JsonNode sqsMessageNode = JSON_OBJECT_MAPPER.readTree(sqsMessageText);
 
         // first assert parent node
-        assertEquals(2, sqsMessageNode.size());
+        assertEquals(3, sqsMessageNode.size());
 
-        // then assert white list
+        // then assert args
+        assertEquals("INSTANT", sqsMessageNode.get("exportType").textValue());
+        assertEquals(REQUEST_TAG, sqsMessageNode.get("tag").textValue());
         JsonNode studyWhitelist = sqsMessageNode.path("studyWhitelist");
         assertEquals(1, studyWhitelist.size());
         if (studyWhitelist.isArray()) {
             JsonNode objNode = studyWhitelist.get(0);
-            assertEquals(TEST_STUDY_IDENTIFIER, objNode.asText());
+            assertEquals(TEST_STUDY_IDENTIFIER, objNode.textValue());
+        } else {
+            fail("Study whitelist is not an array.");
         }
     }
 }

@@ -26,11 +26,9 @@ public class InstantExportViaSqsService implements InstantExportService{
     private static final ObjectMapper JSON_OBJECT_MAPPER = new ObjectMapper();
     // constants - these are package scoped so unit tests can access them
     static final String CONFIG_KEY_EXPORTER_SQS_QUEUE_URL = "exporter.request.sqs.queue.url";
-    static final String REQUEST_KEY_END_DATE_TIME = "endDateTime";
-    static final String REQUEST_KEY_START_DATE_TIME = "startDateTime";
     static final String REQUEST_KEY_STUDY_WHITE_LIST = "studyWhitelist";
     static final String REQUEST_KEY_EXPORT_TYPE = "exportType";
-    static final String LAST_EXPORT_DATE_TIME = "lastExportDateTime";
+    static final String REQUEST_TAG = "BridgePF Instant Export Request";
 
     private BridgeConfig bridgeConfig;
     private AmazonSQSClient sqsClient;
@@ -62,6 +60,7 @@ public class InstantExportViaSqsService implements InstantExportService{
 
         requestNode.set(REQUEST_KEY_STUDY_WHITE_LIST, studyWhitelist);
         requestNode.put(REQUEST_KEY_EXPORT_TYPE, "INSTANT");
+        requestNode.put("tag", REQUEST_TAG);
 
         String requestJson = JSON_OBJECT_MAPPER.writeValueAsString(requestNode);
 
