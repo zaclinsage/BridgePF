@@ -30,19 +30,10 @@ import com.stormpath.sdk.client.Client;
 import com.stormpath.sdk.client.ClientBuilder;
 import com.stormpath.sdk.client.Clients;
 import com.stormpath.sdk.impl.client.DefaultClientBuilder;
-
-import org.sagebionetworks.bridge.dynamodb.AnnotationBasedTableCreator;
-import org.sagebionetworks.bridge.dynamodb.DynamoCompoundActivityDefinition;
-import org.sagebionetworks.bridge.dynamodb.DynamoNamingHelper;
-import org.sagebionetworks.bridge.dynamodb.DynamoNotificationRegistration;
-import org.sagebionetworks.bridge.dynamodb.DynamoNotificationTopic;
-import org.sagebionetworks.bridge.dynamodb.DynamoTopicSubscription;
-
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
-
 import org.sagebionetworks.client.SynapseAdminClientImpl;
 import org.sagebionetworks.client.SynapseClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -484,6 +475,7 @@ public class BridgeSpringConfig {
     @Autowired
     public DynamoDBMapper exportTimeDdbMapper(DynamoUtils dynamoUtils) {
         return dynamoUtils.getMapper(DynamoExportTime.class);
+    }
 
     @Bean
     public SessionFactory hibernateSessionFactory() {

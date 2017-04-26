@@ -5,7 +5,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.sagebionetworks.bridge.Roles.DEVELOPER;
 import static org.sagebionetworks.bridge.Roles.RESEARCHER;
 
@@ -27,19 +26,17 @@ public class InstantExportControllerTest {
     private InstantExportController controller;
 
     @Mock
-    private UserSession mockSession;
-
-    @Mock
     private InstantExportService mockService;
 
     @Before
     public void before() throws Exception {
+        studyIdentifier = new StudyIdentifierImpl("test-study");
+        UserSession userSession = new UserSession();
+        userSession.setAuthenticated(true);
+        userSession.setStudyIdentifier(studyIdentifier);
         controller = spy(new InstantExportController());
         controller.setInstantExportService(mockService);
-        doReturn(mockSession).when(controller).getAuthenticatedSession(DEVELOPER, RESEARCHER);
-        studyIdentifier = new StudyIdentifierImpl("test-study");
-        when(mockSession.getStudyIdentifier()).thenReturn(studyIdentifier);
-        when(mockSession.isAuthenticated()).thenReturn(true);
+        doReturn(userSession).when(controller).getAuthenticatedSession(DEVELOPER, RESEARCHER);
     }
 
     @Test
