@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +61,7 @@ public class InstantExportViaSqsService implements InstantExportService{
 
         requestNode.set(REQUEST_KEY_STUDY_WHITE_LIST, studyWhitelist);
         requestNode.put(REQUEST_KEY_EXPORT_TYPE, "INSTANT");
-        requestNode.put("tag", REQUEST_TAG);
+        requestNode.put("tag", REQUEST_TAG + "-requested on: " + DateTime.now() + ", study to export: " + studyWhitelist.toString());
 
         String requestJson = JSON_OBJECT_MAPPER.writeValueAsString(requestNode);
 

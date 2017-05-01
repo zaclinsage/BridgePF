@@ -1,7 +1,6 @@
 package org.sagebionetworks.bridge.dynamodb;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -9,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
+import org.joda.time.DateTime;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -21,6 +21,7 @@ import org.sagebionetworks.bridge.models.ExportTime;
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoExportTimeDaoTest {
     private static final String STUDY_ID = "test-study-id";
+    private static final DateTime LAST_EXPORT_DATE_TIME = DateTime.now();
 
     private DynamoDBMapper mockMapper;
 
@@ -30,6 +31,7 @@ public class DynamoExportTimeDaoTest {
     public void setup() {
         ExportTime mockExportTime = ExportTime.create();
         mockExportTime.setStudyId(STUDY_ID);
+        mockExportTime.setLastExportDateTime(LAST_EXPORT_DATE_TIME.getMillis());
 
         mockMapper = mock(DynamoDBMapper.class);
         when(mockMapper.load(any())).thenReturn(mockExportTime);
@@ -43,7 +45,7 @@ public class DynamoExportTimeDaoTest {
         // execute
         ExportTime exportTime = dynamoExportTimeDao.getExportTime(STUDY_ID);
         assertEquals(STUDY_ID, exportTime.getStudyId());
-        assertNull(exportTime.getLastExportDateTime());
+        assertEquals(LAST_EXPORT_DATE_TIME.getMillis(), (long)exportTime.getLastExportDateTime());
         ArgumentCaptor<DynamoExportTime> captor = ArgumentCaptor.forClass(DynamoExportTime.class);
         verify(mockMapper).load(captor.capture());
 
